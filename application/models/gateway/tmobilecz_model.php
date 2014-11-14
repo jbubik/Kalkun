@@ -23,6 +23,7 @@
  * @category	Models
  */
 require_once('nongammu_model'.EXT);
+if (extension_loaded('tesseract')) require_once('tesseract.php');
 
 class Tmobilecz_model extends nongammu_model { 
 	
@@ -167,13 +168,30 @@ class Tmobilecz_model extends nongammu_model {
             return "Security code not found";
         log_message('debug',"TMCZ> Security code: ".$matches[1]);
 
+        curl_setopt($curl, CURLOPT_REFERER, curl_getinfo($curl, CURLINFO_EFFECTIVE_URL) );
+        $captcha="";
 	if(preg_match('|<span\sclass=.*captcha|u',$text)){
-	    log_message('debug',"TMCZ> Captcha found. Postponing SMS.");
-            #require_once('tesseract.php');
-            return(false);
+            if(!extension_loaded('tesseract')){
+               log_message('debug',"TMCZ> Captcha found. Tesseract OCR not found. Postponing SMS.");
+               return(false);
+            };
+            $oldurl=curl_getinfo($curl, CURLINFO_EFFECTIVE_URL);
+            curl_setopt($curl, CURLOPT_URL, "https://sms.t-mobile.cz/open/captcha.jpg");
+            $buf=curl_exec($curl);
+
+            // Check if any error occured
+	    if (curl_errno($curl))
+	        return "CURL error : ". curl_error($curl);
+            log_message('info',"TMCZ> GET https://sms.t-mobile.cz/open/captcha.jpg RESULT: ".strlen($buf)." bytes image");
+
+	    $captcha=$this->tm_captcha_ocr($buf);
+            if(!$captcha){
+	        log_message('debug',"TMCZ> OCR failed. Postponing SMS.");
+	        return(false);
+	    };
+            curl_setopt($curl, CURLOPT_REFERER, $oldurl);
 	};
         
-        curl_setopt($curl, CURLOPT_REFERER, curl_getinfo($curl, CURLINFO_EFFECTIVE_URL) );
         curl_setopt($curl, CURLOPT_POST, true);
         curl_setopt($curl, CURLOPT_URL, "https://sms.t-mobile.cz/closed.jsp");
         curl_setopt($curl, CURLOPT_POSTFIELDS,
@@ -184,6 +202,7 @@ class Tmobilecz_model extends nongammu_model {
 		//"TMCZcheck=on&",
 		($dRpt?"confirmation=1&":"").  //confirm SMS delivery
 		($hist?"history=on&":"").      //save in provider's history
+		($captcha?"captcha=$captcha&":"").
 		"email=".urlencode($emlCopy)); //provider will send a copy to e-mail
         log_message('debug',"TMCZ> sending SMS...");
         $text = curl_exec($curl);
@@ -193,7 +212,13 @@ class Tmobilecz_model extends nongammu_model {
             return "CURL error : ". curl_error($curl);
 	log_message('info',"TMCZ> POST https://sms.t-mobile.cz/closed.jsp RESULT:\n".$text."\n---EOF---");
 
-        // Check for proper SMS sending
+        //Check for failed captcha
+	if(preg_match('|Kontrolní kód nesouhlasí|u',$text)||preg_match('|Captcha does not match|u',$text)){
+	    log_message('debug',"TMCZ> Captcha failed. Postponing SMS.");
+	    return(false);
+	};
+
+	// Check for proper SMS sending
         if (!preg_match('|SMS zpr.v. byl. odeslán.|u',$text)&&!preg_match('|SMS was sent|u',$text)
           &&!preg_match('|All SMS messages were sent|u',$text)) {
             if(preg_match('|<p class="text-red text-size-2">(.+)</p>|u',$text,$matches))
@@ -205,6 +230,100 @@ class Tmobilecz_model extends nongammu_model {
 
         curl_close($curl);
         return(true);
+    }
+
+    /**
+    * tm_captcha_ocr
+    * Function to perform OCR on CAPTCHA image
+    * @author jbubik
+    * @category SMS
+    * @example tm_captcha_ocr(imagecreatefrompng("file.png"))
+    * @url https://github.com/jbubik/Kalkun
+    * @return String
+    * This code needs GD library for image processing
+    * This code needs php-tesseract library for OCR, see http://code.google.com/p/php-tesseract/
+    **/
+
+    function tm_captcha_ocr(&$buf)
+    {
+	//init tesseract
+	$api=new TessBaseAPI;
+	$api->Init(".","eng",OEM_DEFAULT);
+	$api->SetPageSegMode(PSM_SINGLE_WORD);
+	$api->SetVariable("tessedit_char_whitelist","0123456789abcdefghijklmnopqrstuvwxyz");
+	//create GD image
+	$img=imagecreatefromstring($buf);
+	$w=imagesx($img);
+	$h=imagesy($img);
+	//shift X-axis
+	$xshift=array(0=>-3,6=>-2,8=>-1,12=>0,
+	     21=>-1,24=>-2,27=>-3,29=>-4,
+	     31=>-5,33=>-6,35=>-7,37=>-8,
+	     40=>-9,44=>-10,49=>0);
+	$prevY=$prevOff=0;
+	foreach($xshift as $y=>$off){
+	    if(($y<$h)&&($prevOff)){
+	        imagecopy($img,$img,$prevOff,$prevY,0,$prevY,$w,$y-$prevY);
+	    };
+	    $prevY=$y;
+	    $prevOff=$off;
+        };
+	//shift Y-axis
+	$yshift=array(0=>-3,24=>-4,25=>-5,34=>-4,37=>-3,42=>-2,49=>-1,
+	     56=>-2,59=>-3,62=>-4,66=>-5,76=>-4,80=>-3,85=>-2,90=>-1,
+	     95=>-2,102=>-3,106=>-4,109=>-5,
+	     121=>-4,124=>-3,128=>-2,131=>-1,135=>0,141=>-1,143=>-2,145=>-3,
+	     149=>-4,153=>-5,164=>-4,167=>-3,171=>-2,174=>-1,178=>0,184=>-1,
+	     199=>0);
+	$prevX=$prevOff=0;
+	foreach($yshift as $x=>$off){
+	    if(($x<$w)&&($prevOff)){
+	        imagecopy($img,$img,$prevX,$prevOff,$prevX,0,$x-$prevX,$h);
+	    };
+	    $prevX=$x;
+	    $prevOff=$off;
+        };
+	//convert to BW
+	for($x=0;$x<$w;$x++){
+	    $startY=-1;
+	    $startisW=0xffffff;
+	    for($y=0;$y<$h;$y++){
+	        $rgb=imagecolorat($img,$x,$y);
+		$r = ($rgb >> 16) & 0xFF;
+		$g = ($rgb >> 8) & 0xFF;
+		$b = $rgb & 0xFF;
+		if(($r==$g)&&($g==$b)){ //BW/gray
+		    if($r>0xc0){
+		        imagesetpixel($img,$x,$y,0xffffff);
+		        if($startY<>-1){$endisW=0xffffff;}else{$startisW=0xffffff;};
+		    }else{
+		        imagesetpixel($img,$x,$y,0x000000);
+		        if($startY<>-1){$endisW=0;}else{$startisW=0;};
+		    };
+		    if($startY<>-1){
+		        imageline($img,$x,$startY,$x,$y,$startisW);
+		        if($startisW<>$endisW){
+		            imageline($img,$x,intval(($startY+$y)/2),$x,$y,$endisW);
+		        };
+		        $startY=-1;
+		        $startisW=0xffffff;
+		    };
+		}else{ //colour
+		    if($startY==-1){
+		        $startY=$y;
+		    };
+		};
+	    };
+        };
+	//back to PNG
+	ob_start();
+	imagepng($img,NULL,1,NULL);
+	$buf=ob_get_contents();
+	ob_end_clean();
+	//perform OCR
+	$captcha=trim(ProcessPagesBuffer($buf,strlen($buf),$api));
+        log_message('debug',"TMCZ> CAPTCHA after OCR: $captcha");
+        return($captcha);
     }
 
 }
