@@ -92,9 +92,12 @@ class nongammu_model extends Gammu_model {
 	        log_message('error',"Message failed via gateway \"$gateway\" to ".$data['dest']." Reason: ".$ret);
 		$this->save_sent_messages($data,$ret);
 		return;
+	    }elseif($ret===true){
+	        $this->save_sent_messages($data);
+	        $this->Kalkun_model->add_sms_used($data['uid']);
+	    }elseif($ret===false){
+	        $this->enqueue_messages($data);
 	    };
-	    $this->save_sent_messages($data);
-	    $this->Kalkun_model->add_sms_used($data['uid']);
         }
 
     /**
@@ -105,8 +108,10 @@ class nongammu_model extends Gammu_model {
     * @author jbubik
     * @category SMS
     * @param	array $data 
-    * @return null/String
-    * Return of string value indicates Error sending the message. Otherwise success.
+    * @return null/String/Bool
+    * Return of string value indicates Error sending the message.
+    * Return of true is success.
+    * Return of false means temporary failure, postpone.
     **/
 
     function really_send_messages($data)
@@ -247,9 +252,12 @@ class nongammu_model extends Gammu_model {
 	        log_message('error',"Message failed via gateway \"$gateway\" to ".$data['dest']." Reason: ".$ret);
 		$this->save_sent_messages($data,$ret);
 		return;
+	    }elseif($ret===true){
+	        $this->save_sent_messages($data);
+	        $this->Kalkun_model->add_sms_used($data['uid']);
+	    }elseif($ret===false){
+	        log_message('debug',"Leaving message via \"$gateway\" to ".$data['dest']." in queue.");
 	    };
-	    $this->save_sent_messages($data);
-	    $this->Kalkun_model->add_sms_used($data['uid']);
 	}
     }
 

@@ -82,8 +82,8 @@ class Tmobilecz_model extends nongammu_model {
                                       $data['class']=="0",$data['delivery_report']=="yes",$hist,$eml);
 	    if(is_string($ret)){
 	        log_message('error',"TMCZ> SMS via ".__CLASS__." to ".$data['dest']." failed: ".$ret);
-		return $ret;
 	    };
+	    return $ret;
         }
 
     /**
@@ -166,6 +166,12 @@ class Tmobilecz_model extends nongammu_model {
         if(!preg_match('|<input\stype="hidden"\sname="counter"\svalue="([0-9a-zA-Z]+)"\s/>|',$text,$matches))
             return "Security code not found";
         log_message('debug',"TMCZ> Security code: ".$matches[1]);
+
+	if(preg_match('|<span\sclass=.*captcha|u',$text)){
+	    log_message('debug',"TMCZ> Captcha found. Postponing SMS.");
+            #require_once('tesseract.php');
+            return(false);
+	};
         
         curl_setopt($curl, CURLOPT_REFERER, curl_getinfo($curl, CURLINFO_EFFECTIVE_URL) );
         curl_setopt($curl, CURLOPT_POST, true);
@@ -198,8 +204,7 @@ class Tmobilecz_model extends nongammu_model {
 	log_message('debug',"TMCZ> SMS sent successfully.");
 
         curl_close($curl);
-        //$result[] = array('phone' => $p, 'msg' => urldecode($msg), 'result' => $res);
-        return $result;
+        return(true);
     }
 
 }
