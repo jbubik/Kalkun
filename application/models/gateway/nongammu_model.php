@@ -167,6 +167,11 @@ class nongammu_model extends Gammu_model {
     **/
     function save_sent_messages($tmp_data,$err_desc="")
     {
+	$this->db->trans_begin();
+	if(!array_key_exists('id_outbox',$tmp_data)){
+            $this->db->insert('outbox', array('MultiPart' => 'false'));
+            $tmp_data['id_outbox']=$this->db->insert_id();
+        }
 	$data = array (
 	          'InsertIntoDB' => date('Y-m-d H:i:s'),
 	          'SendingDateTime' => $tmp_data['date'],
@@ -178,30 +183,18 @@ class nongammu_model extends Gammu_model {
 	          'TextDecoded' => $tmp_data['message'].($err_desc==""?'':' / '.$err_desc),
 	          'RelativeValidity' => $tmp_data['validity'],
 		  'Status' => ($err_desc==""?'SendingOK':'SendingError'),
+                  'ID' => $tmp_data['id_outbox'],
 		  'SequencePosition' => 1,
 		  'id_folder' => 3
 	);
-	$this->db->trans_begin();
-	$this->db->from('sentitems');
-	$this->db->select('ID');
-	$this->db->limit(1);
-	$this->db->order_by('ID', 'DESC');
-	$lstmsg=$this->db->get();
-	if($lstmsg->num_rows==0){
-	  $data['ID']=1;
-	}else{
-	  $data['ID']=1+$lstmsg->row('ID');
-	};
 	$this->db->insert('sentitems', $data);
         $this->db->insert('user_sentitems', array('id_sentitems'=>$data['ID'],
                                                   'id_user'=>$tmp_data['uid']));
-	if(array_key_exists('id_outbox',$tmp_data)){
-	  log_message('debug',"Deleting from outbox message ID=".$tmp_data['id_outbox']);
-	  $this->db->where('ID', $tmp_data['id_outbox']);
-          $this->db->delete('outbox');
-          $this->db->where('id_outbox', $tmp_data['id_outbox']);
-          $this->db->delete('user_outbox');      
-	};
+	log_message('debug',"Deleting from outbox message ID=".$tmp_data['id_outbox']);
+	$this->db->where('ID', $tmp_data['id_outbox']);
+        $this->db->delete('outbox');
+        $this->db->where('id_outbox', $tmp_data['id_outbox']);
+        $this->db->delete('user_outbox');      
 	$this->db->trans_commit();
 	log_message('debug',"Message saved to sentitems dest:".$tmp_data['dest']);
     }
