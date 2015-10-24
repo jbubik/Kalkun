@@ -230,7 +230,7 @@ class Daemon extends Controller {
 	 */
 	function outbox_routine()
 	{
-		$this->load->model(array('Message_model'));
+		$this->load->model(array('Kalkun_model', 'Message_model'));
 		// send waiting messages
 		$this->Message_model->process_outbox_queue();
         }
