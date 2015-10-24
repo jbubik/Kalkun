@@ -182,7 +182,7 @@ class nongammu_model extends Gammu_model {
 	          'SenderID' => strval($tmp_data['SenderID']),
 	          'TextDecoded' => $tmp_data['message'].($err_desc==""?'':' / '.$err_desc),
 	          'RelativeValidity' => $tmp_data['validity'],
-		  'Status' => ($err_desc==""?'SendingOK':'SendingError'),
+		  'Status' => ($err_desc==""?'SendingOKNoReport':'SendingError'),
                   'ID' => $tmp_data['id_outbox'],
 		  'SequencePosition' => 1,
 		  'id_folder' => 3
