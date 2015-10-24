@@ -129,7 +129,7 @@ class Tmobilecz_model extends nongammu_model {
             unlink($cookies);
         curl_setopt($curl, CURLOPT_COOKIEFILE, $cookies);
         curl_setopt($curl, CURLOPT_COOKIEJAR, $cookies);
-        curl_setopt($curl, CURLOPT_URL, "https://sms.t-mobile.cz/closed.jsp");
+        curl_setopt($curl, CURLOPT_URL, "https://www.t-mobile.cz/sms/closed.jsp");
         curl_setopt($curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:29.0) Gecko/20100101 Firefox/29.0");
         curl_setopt($curl, CURLOPT_REFERER, "");
         log_message('debug',"TMCZ> getting first page...");
@@ -138,7 +138,7 @@ class Tmobilecz_model extends nongammu_model {
         // Check if any error occured
         if (curl_errno($curl))
             return "CURL error : ". curl_error($curl);
-	log_message('info',"TMCZ> GET https://sms.t-mobile.cz/closed.jsp RESULT:\n".$text."\n---EOF---");
+	log_message('info',"TMCZ> GET https://www.t-mobile.cz/sms/closed.jsp RESULT:\n".$text."\n---EOF---");
 
         // search if we are already logged in
         if (strpos($text, "/.gang/logout")===false) {
@@ -176,13 +176,13 @@ class Tmobilecz_model extends nongammu_model {
                return(false);
             };
             $oldurl=curl_getinfo($curl, CURLINFO_EFFECTIVE_URL);
-            curl_setopt($curl, CURLOPT_URL, "https://sms.t-mobile.cz/open/captcha.jpg");
+            curl_setopt($curl, CURLOPT_URL, "https://www.t-mobile.cz/sms/open/captcha.jpg");
             $buf=curl_exec($curl);
 
             // Check if any error occured
 	    if (curl_errno($curl))
 	        return "CURL error : ". curl_error($curl);
-            log_message('info',"TMCZ> GET https://sms.t-mobile.cz/open/captcha.jpg RESULT: ".strlen($buf)." bytes image");
+            log_message('info',"TMCZ> GET https://www.t-mobile.cz/sms/open/captcha.jpg RESULT: ".strlen($buf)." bytes image");
 
 	    $captcha=$this->tm_captcha_ocr($buf);
             if(!$captcha){
@@ -193,7 +193,7 @@ class Tmobilecz_model extends nongammu_model {
 	};
         
         curl_setopt($curl, CURLOPT_POST, true);
-        curl_setopt($curl, CURLOPT_URL, "https://sms.t-mobile.cz/closed.jsp");
+        curl_setopt($curl, CURLOPT_URL, "https://www.t-mobile.cz/sms/closed.jsp");
         curl_setopt($curl, CURLOPT_POSTFIELDS,
                 "counter=".$matches[1]."&".
 		"recipients=".urlencode($phone)."&".
@@ -203,6 +203,7 @@ class Tmobilecz_model extends nongammu_model {
 		($dRpt?"confirmation=1&":"").  //confirm SMS delivery
 		($hist?"history=on&":"").      //save in provider's history
 		($captcha?"captcha=$captcha&":"").
+                "sms-template=0&".
 		"email=".urlencode($emlCopy)); //provider will send a copy to e-mail
         log_message('debug',"TMCZ> sending SMS...");
         $text = curl_exec($curl);
@@ -210,7 +211,7 @@ class Tmobilecz_model extends nongammu_model {
         // Check if any error occured
         if (curl_errno($curl))
             return "CURL error : ". curl_error($curl);
-	log_message('info',"TMCZ> POST https://sms.t-mobile.cz/closed.jsp RESULT:\n".$text."\n---EOF---");
+	log_message('info',"TMCZ> POST https://www.t-mobile.cz/sms/closed.jsp RESULT:\n".$text."\n---EOF---");
 
         //Check for failed captcha
 	if(preg_match('|Kontrolní kód nesouhlasí|u',$text)||preg_match('|Captcha does not match|u',$text)){
